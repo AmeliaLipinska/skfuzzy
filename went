@@ -1,0 +1,103 @@
+import numpy as np
+import skfuzzy as fuzz
+from skfuzzy import control as ctrl
+import matplotlib.pyplot as plt
+
+#Zad1
+
+T= np.linspace(0,40,401)
+
+temperatura = {
+    "zimno":      fuzz.trapmf(T, [0, 0, 12, 19]),
+    "komfortowo": fuzz.trimf(T,  [17, 21.5, 26]),
+    "goraco":     fuzz.trapmf(T, [24, 30, 40, 40]),
+}
+
+def rysuj_termy(x, termy, punkt = 0 ):
+    for nazwa, mf in termy.items():
+        plt.plot(x, mf)
+    if punkt is not None:
+        plt.axvline(punkt)
+        for nazwa, mf in termy.items():
+            mu = fuzz.interp_membership(x, mf, punkt)
+            print(mu)
+    plt.show()
+
+rysuj_termy(T, temperatura, punkt =23 )
+
+#Zad2
+A = np.array([0.9, 0.7, 0.4, 0.2, 0.0])
+B = np.array([0.1, 0.3, 0.6, 0.8, 1.0])
+
+
+and_suma = np.fmin(A,B)
+r_iloczyn = np.fmax(A,B)
+negacja_A = 1-A
+
+
+print(and_suma)
+print(r_iloczyn)
+print(negacja_A)
+
+V = np.linspace(0, 100, 1001)
+
+temperatura = {
+    "zimno":      fuzz.trapmf(T, [0, 0, 12, 19]),
+    "komfortowo": fuzz.trimf(T,  [17, 21.5, 26]),
+    "goraco":     fuzz.trapmf(T, [24, 30, 40, 40]),
+}
+
+V = np.linspace(0, 100, 1001)
+predkosc = {
+    "wolno":   fuzz.trapmf(V, [0, 0, 15, 40]),
+    "srednio": fuzz.trimf(V,  [25, 50, 75]),
+    "szybko":  fuzz.trapmf(V, [60, 85, 100, 100]),
+}
+
+reguly = {
+    ("zimno", "wolno"),
+    ("komfortowo", "srednio"),
+    ("goraco", "szybko"),
+}
+
+def wentylator(temp, metoda="centroid", implikacja="min", pokaz=True):
+    # 1. Rozmywanie
+    mu_we = {n: fuzz.interp_membership(T, mf, temp) for n, mf in temperatura.items()}
+
+    # 2-3. Aktywacja reguł i implikacja
+    sciete = {}
+    for we, wy in reguly:
+        aktywacja = mu_we[we]
+        if implikacja == "min":
+            sciete[wy] = np.fmin(aktywacja, predkosc[wy])
+        else:
+            sciete[wy] = aktywacja * predkosc[wy]
+
+    # 4. Agregacja (max)
+    agregat = np.zeros_like(V)
+    for mf in sciete.values():
+        agregat = np.fmax(agregat, mf)
+
+    # 5. Wyostrzanie (domyślnie centroid)
+    y = fuzz.defuzz(V, agregat, metoda)
+
+    if pokaz:
+        fig, ax = plt.subplots(1, 3)
+
+        for n, mf in temperatura.items():
+            ax[0].plot(T, mf, label=f"{n}: μ={mu_we[n]:.2f}")
+        ax[0].axvline(temp)
+
+        for n, mf in predkosc.items():
+            ax[1].plot(V, mf, "--", alpha=0.5)
+            ax[1].fill_between(V, sciete[n], alpha=0.5, label=f"{n} (ścięte)")
+
+        ax[2].fill_between(V, agregat, alpha=0.5, color="gray", label="agregat (max)")
+        ax[2].axvline(y, color="r", lw=2, label=f"{metoda}: {y:.1f} %")
+        plt.tight_layout()
+        plt.show()
+
+    return y
+
+y_27 = wentylator(27, metoda="centroid", implikacja="min", pokaz=True)
+print(f"Dla T = 27 °C prędkość wentylatora (centroid) wynosi: {y_27} %")
